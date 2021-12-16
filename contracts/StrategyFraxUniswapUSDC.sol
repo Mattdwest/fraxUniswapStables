@@ -402,15 +402,17 @@ contract StrategyFraxUniswap is BaseStrategyInitializable {
         );
 
         //uint256 currentValue = estimatedTotalAssets();
-        uint256 fraction = (_amount).mul(1000).div(estimatedTotalAssets());
+        //uint256 fraction = (_amount).mul(1e4).div(estimatedTotalAssets());
 
 
-        (,,,,,,,uint256 initLiquidity,,,,) = IUniNFT(uniNFT).positions(token_id);
+        (,,,,,,,uint128 _liquidityRemove,,,,) = IUniNFT(uniNFT).positions(token_id);
 
-        uint256 liquidityRemove = initLiquidity.mul(fraction).div(1000);
+        ///print initLiquidity;
 
-        uint256 _timestamp = block.timestamp;
-        uint256 deadline = _timestamp.add(5*60);
+        //uint256 liquidityRemove = initLiquidity.mul(fraction).div(1e4);
+
+        uint256 timeStamp = block.timestamp;
+        uint256 deadline = timeStamp.add(5*60);
 
         // should be set at some value for slippage.  Currently at 1 for testing
         //TODO: see above
@@ -418,8 +420,10 @@ contract StrategyFraxUniswap is BaseStrategyInitializable {
         //uint256 amount0Min = 0;
         //uint256 amount1Min = 0;
 
-        uint128 _liquidityRemove = uint128(liquidityRemove);
+        //uint128 _liquidityRemove = initLiquidity;
+        //uint128 _liquidityRemove = uint128(liquidityRemove);
 
+        //withdrawing  everything to brute force solution
         IUniNFT.decreaseStruct memory setDecrease = IUniNFT.decreaseStruct(
                 token_id,
                 _liquidityRemove,
@@ -432,16 +436,34 @@ contract StrategyFraxUniswap is BaseStrategyInitializable {
         uint256 fraxBalance = IERC20(frax).balanceOf(address(this));
         uint256 wantBalance = IERC20(want).balanceOf(address(this));
 
+        //assume 1 FRAX = 1 USDC. Swap to frax
         _curveSwapToWant(fraxBalance);
         uint256 wantBalanceNew = IERC20(want).balanceOf(address(this));
 
-        uint256 difference = balanceOfWant().sub(balanceOfWantBefore);
+        //uint256 difference = wantBalanceNew.sub(wantBalance);
 
-        uint256 NFTDifference = (_balanceOfNFT).sub(difference);
+        //uint256 NFTDifference = (_balanceOfNFT).sub(_amount);
+        //updateNFTValue(NFTDifference);
+        uint256 balanceDeposit = wantBalanceNew.sub(_amount);
+        _curveSwapToFrax(balanceDeposit.mul(1e4).div(2e4));
+        fraxBalance = IERC20(frax).balanceOf(address(this));
+        wantBalance = IERC20(want).balanceOf(address(this));
 
-        updateNFTValue(NFTDifference);
+        timeStamp = block.timestamp;
+        deadline = timeStamp.add(5*60);
 
-        return balanceOfWant().sub(balanceOfWantBefore);
+        IUniNFT.increaseStruct memory setIncrease = IUniNFT.increaseStruct(
+                token_id,
+                fraxBalance,
+                wantBalance.sub(_amount),
+                0,
+                0,
+                deadline);
+
+            // time to add val to NFT
+            IUniNFT(uniNFT).increaseLiquidity(setIncrease);
+
+        return _amount;
     }
 
     // transfers all tokens to new strategy
